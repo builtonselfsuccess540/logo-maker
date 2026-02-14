@@ -13,7 +13,12 @@
       "WebFetch(domain:logo-maker-3jvt.vercel.app)",
       "Bash(git init:*)",
       "Bash(git add:*)",
-      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial commit: Logo Maker application\n\nFeatures:\n- Landing page with 4 feature cards\n- Text Logo Creator with fonts, colors, effects\n- Icon + Text Combo builder with 50+ icons\n- Template Gallery with 15 pre-made templates\n- AI-Powered Generator using Gemini API\n- PNG/SVG download support\n\nStack: Next.js 14, TypeScript, Tailwind CSS\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")"
+      "Bash(git commit -m \"$\\(cat <<''EOF''\nInitial commit: Logo Maker application\n\nFeatures:\n- Landing page with 4 feature cards\n- Text Logo Creator with fonts, colors, effects\n- Icon + Text Combo builder with 50+ icons\n- Template Gallery with 15 pre-made templates\n- AI-Powered Generator using Gemini API\n- PNG/SVG download support\n\nStack: Next.js 14, TypeScript, Tailwind CSS\n\nCo-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>\nEOF\n\\)\")",
+      "Bash(git config:*)",
+      "Bash(gh repo create:*)",
+      "Bash(git remote add:*)",
+      "Bash(git branch:*)",
+      "Bash(git push:*)"
     ]
   }
 }
