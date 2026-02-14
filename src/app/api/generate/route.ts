@@ -53,10 +53,10 @@ export async function POST(request: NextRequest) {
       console.error('Imagen error:', imagenError)
     }
 
-    // Try Gemini image generation model
+    // Try Gemini 3 Pro image generation model
     try {
       const geminiImageResponse = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${apiKey}`,
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-pro-image-preview:generateContent?key=${apiKey}`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
