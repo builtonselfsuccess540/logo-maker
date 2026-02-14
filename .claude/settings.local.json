@@ -18,7 +18,9 @@
       "Bash(gh repo create:*)",
       "Bash(git remote add:*)",
       "Bash(git branch:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "WebFetch(domain:logo-maker-lzcm.vercel.app)",
+      "Bash(git commit:*)"
     ]
   }
 }

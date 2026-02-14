@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { GoogleGenerativeAI } from '@google/generative-ai'
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '')
-
 export async function POST(request: NextRequest) {
   try {
     const { prompt, style, colorScheme } = await request.json()
@@ -15,97 +13,73 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
     }
 
-    const imagePrompt = `Create a professional, clean logo design: ${prompt}.
-Style: ${style || 'modern minimalist'}.
-Color scheme: ${colorScheme || 'vibrant colors'}.
-The logo should be:
-- Simple and memorable
-- Suitable for business branding
-- Clean vector-style appearance
-- Centered on a solid background
-- Professional and polished
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
 
-Generate a high-quality logo image.`
+    const svgPrompt = `You are an expert logo designer who creates SVG logos. Create a logo based on this request:
 
-    try {
-      // Try image generation model first
-      const model = genAI.getGenerativeModel({
-        model: 'gemini-2.0-flash-exp',
-        generationConfig: {
-          responseMimeType: 'text/plain',
-        }
-      })
-
-      // Generate a detailed text description for the logo
-      const descriptionPrompt = `You are a professional logo designer. Based on this request, create a detailed SVG logo description.
-
-Request: ${prompt}
+Description: ${prompt}
 Style: ${style || 'modern minimalist'}
-Colors: ${colorScheme || 'vibrant colors'}
+Color scheme: ${colorScheme || 'vibrant colors'}
 
-Respond with ONLY valid SVG code for a simple, professional logo. The SVG should:
-- Be 200x200 viewBox
-- Use simple shapes (circles, rectangles, paths)
-- Include the brand name as text if appropriate
-- Use the specified color scheme
-- Be clean and minimalist
+IMPORTANT: Respond with ONLY valid SVG code. No explanations, no markdown, no code blocks.
 
-Start your response with <svg and end with </svg>. No explanation, just the SVG code.`
+Requirements for the SVG:
+- viewBox="0 0 200 200"
+- Use simple shapes: rect, circle, ellipse, polygon, path, text
+- Include brand text if the description mentions a name
+- Use colors matching the requested color scheme
+- Keep it simple and professional
+- Make sure all tags are properly closed
 
-      const result = await model.generateContent(descriptionPrompt)
-      const response = await result.response
-      const text = response.text()
+Start directly with <svg and end with </svg>`
 
-      // Extract SVG from response
-      const svgMatch = text.match(/<svg[\s\S]*<\/svg>/i)
-      if (svgMatch) {
-        const svgCode = svgMatch[0]
-        // Convert SVG to base64 data URL
-        const base64 = Buffer.from(svgCode).toString('base64')
-        const dataUrl = `data:image/svg+xml;base64,${base64}`
+    const result = await model.generateContent(svgPrompt)
+    const response = await result.response
+    const text = response.text()
 
-        return NextResponse.json({
-          image: dataUrl,
-          svg: svgCode,
-          type: 'svg'
-        })
-      }
+    // Extract SVG from response (handle potential markdown code blocks)
+    let svgCode = text
 
-      // If no SVG, return the text description
-      return NextResponse.json({
-        description: text,
-        type: 'description'
-      })
+    // Remove markdown code blocks if present
+    svgCode = svgCode.replace(/```svg\n?/gi, '').replace(/```xml\n?/gi, '').replace(/```\n?/g, '')
 
-    } catch (genError: unknown) {
-      console.error('Generation error:', genError)
+    // Extract just the SVG
+    const svgMatch = svgCode.match(/<svg[\s\S]*?<\/svg>/i)
 
-      // Fallback: generate a text description
-      const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' })
-
-      const fallbackPrompt = `Describe a professional logo design for: ${prompt}
-Style: ${style || 'modern minimalist'}
-Colors: ${colorScheme || 'vibrant colors'}
-
-Provide a brief, creative description of what this logo would look like, including:
-- Main visual elements
-- Color palette
-- Typography suggestions
-- Overall composition`
-
-      const result = await model.generateContent(fallbackPrompt)
-      const response = await result.response
+    if (svgMatch) {
+      svgCode = svgMatch[0]
+      // Convert SVG to base64 data URL
+      const base64 = Buffer.from(svgCode).toString('base64')
+      const dataUrl = `data:image/svg+xml;base64,${base64}`
 
       return NextResponse.json({
-        description: response.text(),
-        type: 'description'
+        image: dataUrl,
+        svg: svgCode,
+        type: 'svg'
       })
     }
 
+    // If no valid SVG, generate a description instead
+    const fallbackPrompt = `Describe a professional logo design for: ${prompt}
+Style: ${style || 'modern minimalist'}
+Colors: ${colorScheme || 'vibrant colors'}
+
+Provide a brief, creative description of what this logo would look like.`
+
+    const fallbackResult = await model.generateContent(fallbackPrompt)
+    const fallbackResponse = await fallbackResult.response
+
+    return NextResponse.json({
+      description: fallbackResponse.text(),
+      type: 'description'
+    })
+
   } catch (error) {
     console.error('API Error:', error)
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     return NextResponse.json(
-      { error: 'Failed to generate logo' },
+      { error: `Failed to generate logo: ${errorMessage}` },
       { status: 500 }
     )
   }
