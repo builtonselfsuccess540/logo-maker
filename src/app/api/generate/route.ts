@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { GoogleGenerativeAI } from '@google/generative-ai'
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,79 +12,58 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
     }
 
-    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    // Use Imagen API for image generation
+    const imagePrompt = `A professional minimalist logo design: ${prompt}. Style: ${style || 'modern clean'}. Colors: ${colorScheme || 'vibrant'}. Simple flat design, centered on white background, suitable for branding.`
 
-    // Use the image generation model
-    const model = genAI.getGenerativeModel({
-      model: 'gemini-2.0-flash-exp-image-generation',
-    })
-
-    // Clean the prompt to avoid triggering content filters
-    const cleanPrompt = prompt
-      .replace(/\b(team|company|business|brand|organization|corp|inc|llc)\b/gi, '')
-      .replace(/\b(political|politics|government)\b/gi, '')
-      .trim()
-
-    const imagePrompt = `Create a digital illustration of a logo design:
-
-${cleanPrompt}
-
-Art style: ${style || 'modern minimalist'}, graphic design, icon style
-Colors: ${colorScheme || 'vibrant colors'}
-
-The image should be:
-- A clean graphic design illustration
-- Centered on a solid color background
-- Simple, iconic, memorable design
-- High quality digital art`
-
-    const result = await model.generateContent(imagePrompt)
-    const response = await result.response
-
-    // Check for generated image in the response
-    const candidates = response.candidates
-    if (candidates && candidates.length > 0) {
-      const parts = candidates[0].content?.parts
-      if (parts) {
-        for (const part of parts) {
-          // Check if this part contains image data
-          if ('inlineData' in part && part.inlineData) {
-            const imageData = part.inlineData
-            const dataUrl = `data:${imageData.mimeType};base64,${imageData.data}`
-            return NextResponse.json({
-              image: dataUrl,
-              type: 'image'
-            })
+    const imagenResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-4.0-generate-001:generateImages?key=${process.env.GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: imagePrompt,
+          config: {
+            numberOfImages: 1,
+            aspectRatio: '1:1',
+            outputConfig: {
+              mimeType: 'image/png'
+            }
           }
-        }
+        })
+      }
+    )
 
-        // If no image but has text, return as description
-        for (const part of parts) {
-          if ('text' in part && part.text) {
-            return NextResponse.json({
-              description: part.text,
-              type: 'description'
-            })
-          }
+    if (imagenResponse.ok) {
+      const data = await imagenResponse.json()
+      if (data.generatedImages && data.generatedImages.length > 0) {
+        const imageData = data.generatedImages[0].image
+        if (imageData.bytesBase64Encoded) {
+          return NextResponse.json({
+            image: `data:image/png;base64,${imageData.bytesBase64Encoded}`,
+            type: 'image'
+          })
         }
       }
     }
 
-    // Fallback: use regular model to generate SVG
-    const svgModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
+    // Fallback to Gemini for SVG generation
+    const { GoogleGenerativeAI } = await import('@google/generative-ai')
+    const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    const svgPrompt = `Create a simple SVG logo for: ${prompt}
+    const svgPrompt = `You are a logo designer. Create an SVG logo based on: ${prompt}
 Style: ${style || 'modern minimalist'}
 Colors: ${colorScheme || 'vibrant colors'}
 
-Respond with ONLY valid SVG code. viewBox="0 0 200 200". Start with <svg and end with </svg>.`
+Output ONLY valid SVG code with viewBox="0 0 200 200". Use simple shapes and the specified colors. No explanations.`
 
-    const svgResult = await svgModel.generateContent(svgPrompt)
-    const svgResponse = await svgResult.response
-    const text = svgResponse.text()
+    const result = await model.generateContent(svgPrompt)
+    const text = result.response.text()
 
     // Extract SVG
-    const svgMatch = text.replace(/```[\s\S]*?```/g, '').match(/<svg[\s\S]*?<\/svg>/i)
+    const cleaned = text.replace(/```[a-z]*\n?/gi, '').replace(/```/g, '')
+    const svgMatch = cleaned.match(/<svg[\s\S]*?<\/svg>/i)
+
     if (svgMatch) {
       const base64 = Buffer.from(svgMatch[0]).toString('base64')
       return NextResponse.json({
