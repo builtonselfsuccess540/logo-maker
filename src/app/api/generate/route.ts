@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: 'gemini-pro' })
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
     const svgPrompt = `You are an expert logo designer who creates SVG logos. Create a logo based on this request:
 
