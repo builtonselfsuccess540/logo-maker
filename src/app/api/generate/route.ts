@@ -14,64 +14,84 @@ export async function POST(request: NextRequest) {
     }
 
     const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
-    const svgPrompt = `You are an expert logo designer who creates SVG logos. Create a logo based on this request:
+    // Use the image generation model
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-2.0-flash-exp-image-generation',
+    })
 
-Description: ${prompt}
+    const imagePrompt = `Generate a professional logo image:
+
+${prompt}
+
 Style: ${style || 'modern minimalist'}
 Color scheme: ${colorScheme || 'vibrant colors'}
 
-IMPORTANT: Respond with ONLY valid SVG code. No explanations, no markdown, no code blocks.
+Requirements:
+- Clean, professional logo design
+- High quality and detailed
+- Suitable for business branding
+- Centered composition on a clean background
+- Vector-style appearance`
 
-Requirements for the SVG:
-- viewBox="0 0 200 200"
-- Use simple shapes: rect, circle, ellipse, polygon, path, text
-- Include brand text if the description mentions a name
-- Use colors matching the requested color scheme
-- Keep it simple and professional
-- Make sure all tags are properly closed
-
-Start directly with <svg and end with </svg>`
-
-    const result = await model.generateContent(svgPrompt)
+    const result = await model.generateContent(imagePrompt)
     const response = await result.response
-    const text = response.text()
 
-    // Extract SVG from response (handle potential markdown code blocks)
-    let svgCode = text
+    // Check for generated image in the response
+    const candidates = response.candidates
+    if (candidates && candidates.length > 0) {
+      const parts = candidates[0].content?.parts
+      if (parts) {
+        for (const part of parts) {
+          // Check if this part contains image data
+          if ('inlineData' in part && part.inlineData) {
+            const imageData = part.inlineData
+            const dataUrl = `data:${imageData.mimeType};base64,${imageData.data}`
+            return NextResponse.json({
+              image: dataUrl,
+              type: 'image'
+            })
+          }
+        }
 
-    // Remove markdown code blocks if present
-    svgCode = svgCode.replace(/```svg\n?/gi, '').replace(/```xml\n?/gi, '').replace(/```\n?/g, '')
+        // If no image but has text, return as description
+        for (const part of parts) {
+          if ('text' in part && part.text) {
+            return NextResponse.json({
+              description: part.text,
+              type: 'description'
+            })
+          }
+        }
+      }
+    }
 
-    // Extract just the SVG
-    const svgMatch = svgCode.match(/<svg[\s\S]*?<\/svg>/i)
+    // Fallback: use regular model to generate SVG
+    const svgModel = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' })
 
+    const svgPrompt = `Create a simple SVG logo for: ${prompt}
+Style: ${style || 'modern minimalist'}
+Colors: ${colorScheme || 'vibrant colors'}
+
+Respond with ONLY valid SVG code. viewBox="0 0 200 200". Start with <svg and end with </svg>.`
+
+    const svgResult = await svgModel.generateContent(svgPrompt)
+    const svgResponse = await svgResult.response
+    const text = svgResponse.text()
+
+    // Extract SVG
+    const svgMatch = text.replace(/```[\s\S]*?```/g, '').match(/<svg[\s\S]*?<\/svg>/i)
     if (svgMatch) {
-      svgCode = svgMatch[0]
-      // Convert SVG to base64 data URL
-      const base64 = Buffer.from(svgCode).toString('base64')
-      const dataUrl = `data:image/svg+xml;base64,${base64}`
-
+      const base64 = Buffer.from(svgMatch[0]).toString('base64')
       return NextResponse.json({
-        image: dataUrl,
-        svg: svgCode,
+        image: `data:image/svg+xml;base64,${base64}`,
+        svg: svgMatch[0],
         type: 'svg'
       })
     }
 
-    // If no valid SVG, generate a description instead
-    const fallbackPrompt = `Describe a professional logo design for: ${prompt}
-Style: ${style || 'modern minimalist'}
-Colors: ${colorScheme || 'vibrant colors'}
-
-Provide a brief, creative description of what this logo would look like.`
-
-    const fallbackResult = await model.generateContent(fallbackPrompt)
-    const fallbackResponse = await fallbackResult.response
-
     return NextResponse.json({
-      description: fallbackResponse.text(),
+      description: text,
       type: 'description'
     })
 
