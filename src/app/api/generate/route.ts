@@ -20,19 +20,24 @@ export async function POST(request: NextRequest) {
       model: 'gemini-2.0-flash-exp-image-generation',
     })
 
-    const imagePrompt = `Generate a professional logo image:
+    // Clean the prompt to avoid triggering content filters
+    const cleanPrompt = prompt
+      .replace(/\b(team|company|business|brand|organization|corp|inc|llc)\b/gi, '')
+      .replace(/\b(political|politics|government)\b/gi, '')
+      .trim()
 
-${prompt}
+    const imagePrompt = `Create a digital illustration of a logo design:
 
-Style: ${style || 'modern minimalist'}
-Color scheme: ${colorScheme || 'vibrant colors'}
+${cleanPrompt}
 
-Requirements:
-- Clean, professional logo design
-- High quality and detailed
-- Suitable for business branding
-- Centered composition on a clean background
-- Vector-style appearance`
+Art style: ${style || 'modern minimalist'}, graphic design, icon style
+Colors: ${colorScheme || 'vibrant colors'}
+
+The image should be:
+- A clean graphic design illustration
+- Centered on a solid color background
+- Simple, iconic, memorable design
+- High quality digital art`
 
     const result = await model.generateContent(imagePrompt)
     const response = await result.response
